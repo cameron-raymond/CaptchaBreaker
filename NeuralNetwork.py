@@ -56,12 +56,47 @@ def trainModel(data,labels):
     # scale the raw pixel intensities to the range [0, 1] (this improves training)
     data = np.array(data, dtype="float") / 255.0
     labels = np.array(labels)
-
+    print("parsing data")
     # Split the training data into separate train and test sets
     (X_train, X_test, Y_train, Y_test) = train_test_split(data, labels, test_size=0.25, random_state=0)
+    # Convert the labels (letters) into one-hot encodings that Keras can work with
+    lb = LabelBinarizer().fit(Y_train)
+    Y_train = lb.transform(Y_train)
+    Y_test = lb.transform(Y_test)
+    print("encoding data")
+    # Save the mapping from labels to one-hot encodings.
+    # We'll need this later when we use the model to decode what it's predictions mean
+    with open(MODEL_LABELS_FILENAME, "wb") as f:
+        pickle.dump(lb, f)
+    print('Creating edges')
+    # Build the neural network!
+    model = Sequential()
 
+    # First convolutional layer with max pooling
+    model.add(Conv2D(20, (5, 5), padding="same", input_shape=(20, 20, 1), activation="relu"))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
 
-if __name__=="__main":
+    # Second convolutional layer with max pooling
+    model.add(Conv2D(50, (5, 5), padding="same", activation="relu"))
+    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+
+    # Hidden layer with 500 nodes
+    model.add(Flatten())
+    model.add(Dense(500, activation="relu"))
+
+    # Output layer with 32 nodes (one for each possible letter/number we predict)
+    model.add(Dense(32, activation="softmax"))
+    print("compiling model")
+    # Ask Keras to build the TensorFlow model behind the scenes
+    model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+    print("fitting data")
+    # Train the neural network
+    model.fit(X_train, Y_train, validation_data=(X_test, Y_test), batch_size=32, epochs=10, verbose=1)
+    print("saving model")
+    # Save the trained model to disk
+    model.save(MODEL_FILENAME)
+
+if __name__=="__main__":
     # initialize the data and labels
     data = []
     labels = []
@@ -74,9 +109,8 @@ if __name__=="__main":
         img = np.expand_dims(img, axis=2)
         
         label = imageFile.split(os.path.sep)[-2]
-        print(imageFile,label)
 
-        data.append(image)
+        data.append(img)
         labels.append(label)
     trainModel(data,labels)
 
